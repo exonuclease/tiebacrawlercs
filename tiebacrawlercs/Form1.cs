@@ -21,8 +21,8 @@ namespace tiebacrawlercs
         List<string> keywords = new List<string>();
         List<string> responsebodys = new List<string>();
         List<HttpResponseMessage> ress = new List<HttpResponseMessage>();
-        Hashtable freplys = new Hashtable();
-
+        Dictionary<string, string> freplys = new Dictionary<string, string>();
+        List<Task<string>> responsebodyts = new List<Task<string>>();
         static bool fkw(List<string> kws, string html)
         {
             foreach (string kw in kws)
@@ -43,7 +43,7 @@ namespace tiebacrawlercs
         {
             if (textBox1.Text.Trim().Length < 7 || textBox1.Text.Trim().Substring(0, 7) != "http://")
             {
-                MessageBox.Show("请输入正确的地址");
+                MessageBox.Show("请输入正确的地址(╯‵□′)╯︵┻━┻");
                 textBox1.Focus();
             }
             else
@@ -59,7 +59,7 @@ namespace tiebacrawlercs
             }
             else
             {
-                MessageBox.Show("请输入正确的起始楼层");
+                MessageBox.Show("请输入正确的起始页(╯‵□′)╯︵┻━┻");
                 textBox2.Focus();
             }
         }
@@ -73,7 +73,7 @@ namespace tiebacrawlercs
             }
             else
             {
-                MessageBox.Show("请输入正确的结束楼层");
+                MessageBox.Show("请输入正确的结束页(╯‵□′)╯︵┻━┻");
                 textBox3.Focus();
             }
         }
@@ -94,20 +94,32 @@ namespace tiebacrawlercs
             responsebodys.Clear();
             richTextBox1.Clear();
             freplys.Clear();
-            await createtask();
+            progressBar1.Minimum = pagestart;
+            progressBar1.Maximum = pageend + 1;
+            progressBar1.Value = pagestart;
+           await createtask();
         }
 
+        private async Task<string> downopage(string url, HttpClient client)
+        {
+            System.Diagnostics.Debug.Write(System.DateTime.Now.ToString() + "\n");
+            var res = await client.GetAsync(url);
+            var responsebody = await res.Content.ReadAsStringAsync();
+            progressBar1.Value++;
+            return responsebody;
+        }
         private async Task createtask()
         {
             HttpClient client = new HttpClient();
+
             client.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2486.0 Safari/537.36 Edge/14.14291");
             for (int i = pagestart; i <= pageend; i++)
             {
-                ress.Add(await client.GetAsync(url + "?pn=" + i));
+                responsebodyts.Add(downopage(url + "?pn=" + i, client));
             }
-            for (int i = 0; i <= pageend - pagestart; i++)
+            foreach (var responsebodyt in responsebodyts)
             {
-                responsebodys.Add(await ress[i].Content.ReadAsStringAsync());
+                responsebodys.Add(await responsebodyt);
             }
             foreach (string responsebody in responsebodys)
             {
@@ -125,30 +137,44 @@ namespace tiebacrawlercs
                         Regex mreply = new Regex(@"(?<=>).*?(?=</div>)");
                         Regex mpid = new Regex(@"(?<=post_content_).*?(?="")");
                         string pid = mpid.Match(matchedreply).Value.Trim();
-                        string reply = mreply.Match(matchedreply).Value.Trim().Replace("<br>","\n");
-                        reply = Regex.Replace(reply,@"\n+","\n");
+                        string reply = mreply.Match(matchedreply).Value.Trim().Replace("<br>", "\n");
+                        reply = Regex.Replace(reply, @"\n+", "\n");
                         try
                         {
                             freplys.Add(reply, pid);
                         }
-                        catch(ArgumentException)
+                        catch (ArgumentException)
                         {
 
                         }
                     }
                 }
             }
-            foreach(string freply in freplys.Keys)
+            if (freplys.Count == 0)
+                richTextBox1.Text += "没有找到结果！╮(￣▽￣)╭";
+            else
             {
-                richTextBox1.Text += freply + "\n";
-                richTextBox1.Text += url + "?pid=" + freplys[freply] + "&cid=0#" + freplys[freply];
-                richTextBox1.Text += "\n\n";
+                foreach (string freply in freplys.Keys)
+                {
+                    richTextBox1.Text += freply + "\n";
+                    richTextBox1.Text += url + "?pid=" + freplys[freply] + "&cid=0#" + freplys[freply] + "\n\n";
+                }
             }
         }
 
         private void richTextBox1_LinkClicked(object sender, LinkClickedEventArgs e)
         {
             System.Diagnostics.Process.Start(e.LinkText);
+        }
+
+        private void richTextBox1_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void progressBar1_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
