@@ -1,15 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 using System.Net.Http;
-using System.Collections;
 
 namespace tiebacrawlercs
 {
@@ -25,7 +19,7 @@ namespace tiebacrawlercs
         List<Task<string>> responsebodyts = new List<Task<string>>();
         static bool fkw(List<string> kws, string html)
         {
-            foreach (string kw in kws)
+            foreach (var kw in kws)
             {
                 if (!(html.IndexOf(kw) > -1))
                     return false;
@@ -41,7 +35,7 @@ namespace tiebacrawlercs
 
         private void textBox1_Leave(object sender, EventArgs e)
         {
-            if (textBox1.Text.Trim().Length < 7 || textBox1.Text.Trim().Substring(0, 7) != "http://")
+            if (textBox1.Text.Trim().Length < 7 || (textBox1.Text.Trim().Substring(0, 7) != "http://" && textBox1.Text.Trim().Substring(0, 8) != "https://"))
             {
                 MessageBox.Show("请输入正确的地址(╯‵□′)╯︵┻━┻");
                 textBox1.Focus();
@@ -52,7 +46,7 @@ namespace tiebacrawlercs
 
         private void textBox2_Leave(object sender, EventArgs e)
         {
-            Regex isnum = new Regex(@"\d+");
+            var isnum = new Regex(@"\d+");
             if (isnum.IsMatch(textBox2.Text.Trim()))
             {
                 pagestart = Convert.ToInt32(textBox2.Text.Trim());
@@ -66,7 +60,7 @@ namespace tiebacrawlercs
 
         private void textBox3_Leave(object sender, EventArgs e)
         {
-            Regex isnum = new Regex(@"\d+");
+            var isnum = new Regex(@"\d+");
             if (isnum.IsMatch(textBox3.Text.Trim()))
             {
                 pageend = Convert.ToInt32(textBox3.Text.Trim());
@@ -80,9 +74,9 @@ namespace tiebacrawlercs
 
         private void textBox4_Leave(object sender, EventArgs e)
         {
-            string[] keywordarray = textBox4.Text.Trim().Split(new Char[] { ',' });
+            var keywordarray = textBox4.Text.Trim().Split(new Char[] { ',' });
             keywords.Clear();
-            foreach (string keyword in keywordarray)
+            foreach (var keyword in keywordarray)
             {
                 keywords.Add(keyword);
             }
@@ -97,7 +91,7 @@ namespace tiebacrawlercs
             progressBar1.Minimum = pagestart;
             progressBar1.Maximum = pageend + 1;
             progressBar1.Value = pagestart;
-           await createtask();
+            await createtask();
         }
 
         private async Task<string> downopage(string url, HttpClient client)
@@ -105,14 +99,39 @@ namespace tiebacrawlercs
             System.Diagnostics.Debug.Write(System.DateTime.Now.ToString() + "\n");
             var res = await client.GetAsync(url);
             var responsebody = await res.Content.ReadAsStringAsync();
+            var matchreply = new Regex(@"<div id=""post_content_\d*"" class=""d_post_content j_d_post_content "" style=""display:;"">.*?</div>");
+            var matchedreplysc = matchreply.Matches(responsebody);
+            var matchedreplys = new List<string>();
+            foreach (Match matchedreplyc in matchedreplysc)
+            {
+                matchedreplys.Add(matchedreplyc.Value);
+            }
+            foreach (var matchedreply in matchedreplys)
+            {
+                if (fkw(keywords, matchedreply))
+                {
+                    var mreply = new Regex(@"(?<=>).*?(?=</div>)");
+                    var mpid = new Regex(@"(?<=post_content_).*?(?="")");
+                    var pid = mpid.Match(matchedreply).Value.Trim();
+                    var reply = mreply.Match(matchedreply).Value.Trim().Replace("<br>", "\n");
+                    reply = Regex.Replace(reply, @"\n+", "\n");
+                    try
+                    {
+                        freplys.Add(reply, pid);
+                    }
+                    catch (ArgumentException)
+                    {
+
+                    }
+                }
+            }
             progressBar1.Value++;
             return responsebody;
         }
         private async Task createtask()
         {
-            HttpClient client = new HttpClient();
-
-            client.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2486.0 Safari/537.36 Edge/14.14291");
+            var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.80 Safari/537.36");
             for (int i = pagestart; i <= pageend; i++)
             {
                 responsebodyts.Add(downopage(url + "?pn=" + i, client));
@@ -121,40 +140,11 @@ namespace tiebacrawlercs
             {
                 responsebodys.Add(await responsebodyt);
             }
-            foreach (string responsebody in responsebodys)
-            {
-                Regex matchreply = new Regex(@"<div id=""post_content_\d*"" class=""d_post_content j_d_post_content "">.*?</div>");
-                MatchCollection matchedreplysc = matchreply.Matches(responsebody);
-                List<string> matchedreplys = new List<string>();
-                foreach (Match matchedreplyc in matchedreplysc)
-                {
-                    matchedreplys.Add(matchedreplyc.Value);
-                }
-                foreach (string matchedreply in matchedreplys)
-                {
-                    if (fkw(keywords, matchedreply))
-                    {
-                        Regex mreply = new Regex(@"(?<=>).*?(?=</div>)");
-                        Regex mpid = new Regex(@"(?<=post_content_).*?(?="")");
-                        string pid = mpid.Match(matchedreply).Value.Trim();
-                        string reply = mreply.Match(matchedreply).Value.Trim().Replace("<br>", "\n");
-                        reply = Regex.Replace(reply, @"\n+", "\n");
-                        try
-                        {
-                            freplys.Add(reply, pid);
-                        }
-                        catch (ArgumentException)
-                        {
-
-                        }
-                    }
-                }
-            }
             if (freplys.Count == 0)
                 richTextBox1.Text += "没有找到结果！╮(￣▽￣)╭";
             else
             {
-                foreach (string freply in freplys.Keys)
+                foreach (var freply in freplys.Keys)
                 {
                     richTextBox1.Text += freply + "\n";
                     richTextBox1.Text += url + "?pid=" + freplys[freply] + "&cid=0#" + freplys[freply] + "\n\n";
